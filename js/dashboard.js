@@ -35,6 +35,217 @@
   const batchConfirmBtn = document.getElementById('batchConfirmReports');
   const exportCandidatesBtn = document.getElementById('exportCandidatesBtn');
   const aggregateMetricsBody = document.getElementById('aggregateMetricsBody');
+  // Listening shifts elements (expert tab 2)
+  const shiftsPanel = document.getElementById('listeningShiftsPanel');
+  const shiftListEl = document.getElementById('shiftList');
+  const shiftStartInput = document.getElementById('shiftStart');
+  const shiftEndInput = document.getElementById('shiftEnd');
+  const addShiftBtn = document.getElementById('addShiftBtn');
+  const clearShiftFormBtn = document.getElementById('clearShiftFormBtn');
+  const editingShiftIdInput = document.getElementById('editingShiftId');
+  const calPrevBtn = document.getElementById('calPrevBtn');
+  const calNextBtn = document.getElementById('calNextBtn');
+  const calMonthLabel = document.getElementById('calMonthLabel');
+  const shiftCalendarEl = document.getElementById('shiftCalendar');
+  const shiftSummaryEl = document.getElementById('shiftSummary');
+  const shiftLegendEl = document.getElementById('shiftLegend');
+  const tabsNav = document.getElementById('expertDashTabs');
+
+  // --- Tab Navigation ---
+  if(tabsNav){
+    tabsNav.addEventListener('click', e=>{
+      const btn = e.target.closest('.dash-tab');
+      if(!btn) return;
+      const target = btn.getAttribute('data-tab');
+      document.querySelectorAll('.dash-tab').forEach(b=>b.classList.toggle('active', b===btn));
+      document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active', p.id===target));
+      if(target==='shiftsTab' && role==='expert'){ renderCalendar(); renderShifts(); }
+    });
+  }
+
+  // --- Shift Storage ---
+  function readShifts(){
+    try { return JSON.parse(localStorage.getItem('listeningShifts')||'[]'); } catch(e){ return []; }
+  }
+  function saveShifts(arr){ localStorage.setItem('listeningShifts', JSON.stringify(arr)); }
+  function genShiftId(){ return 'shift_'+Date.now()+'_'+Math.random().toString(36).slice(2,8); }
+
+  // --- User Color Mapping ---
+  const USER_COLORS = ['#4fc3f7','#ffb74d','#81c784','#ce93d8','#f06292','#4db6ac','#9575cd','#aed581'];
+  function userColor(uid){ if(!uid) return '#888'; let hash=0; for(let i=0;i<uid.length;i++){ hash=(hash*31+uid.charCodeAt(i))>>>0; } return USER_COLORS[hash % USER_COLORS.length]; }
+
+  // --- Duration Helpers ---
+  function shiftDurationHours(s){ return (new Date(s.end)-new Date(s.start))/(1000*60*60); }
+  function formatHours(h){ return (Math.round(h*10)/10).toFixed(1); }
+  function isSameDay(dateIso, dayKey){ return dateIso.slice(0,10)===dayKey; }
+  function eachDaySpan(s){
+    const days=[]; let cur = new Date(s.start.slice(0,10));
+    const end = new Date(s.end); // inclusive logic for calendar representation
+    const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    while(cur <= endDay){ days.push(cur.toISOString().slice(0,10)); cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate()+1); }
+    return days;
+  }
+
+  function addShift(startIso, endIso){
+    const uid = localStorage.getItem('demoUserId');
+    const uname = localStorage.getItem('demoUserName');
+    if(!uid) return;
+    const shifts = readShifts();
+    shifts.push({id:genShiftId(), start:startIso, end:endIso, userId:uid, userName:uname});
+    saveShifts(shifts);
+  }
+  function updateShift(id, startIso, endIso){
+    const shifts = readShifts();
+    const idx = shifts.findIndex(s=>s.id===id); if(idx>=0){ shifts[idx].start=startIso; shifts[idx].end=endIso; saveShifts(shifts); }
+  }
+  function deleteShift(id){
+    const shifts = readShifts().filter(s=>s.id!==id); saveShifts(shifts);
+  }
+
+  // --- Calendar Logic ---
+  let calView = new Date(); // month anchor
+  function startOfMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
+  function endOfMonth(d){ return new Date(d.getFullYear(), d.getMonth()+1, 0); }
+  function fmtDate(dt){ const y=dt.getFullYear(); const m=String(dt.getMonth()+1).padStart(2,'0'); const da=String(dt.getDate()).padStart(2,'0'); return `${y}-${m}-${da}`; }
+  let selectedDay = null; // 'YYYY-MM-DD'
+
+  function renderCalendar(){
+    if(!shiftCalendarEl) return;
+    const anchor = startOfMonth(calView);
+    const firstDow = anchor.getDay();
+    const daysInMonth = endOfMonth(anchor).getDate();
+    const prevMonth = new Date(anchor.getFullYear(), anchor.getMonth(), 0);
+    const nextMonth = new Date(anchor.getFullYear(), anchor.getMonth()+1, 1);
+    calMonthLabel && (calMonthLabel.textContent = anchor.toLocaleString(undefined,{month:'long', year:'numeric'}));
+    const cells = [];
+    // Leading days
+    for(let i=0;i<firstDow;i++){
+      const dayNum = prevMonth.getDate()-firstDow+i+1;
+      const d = new Date(anchor.getFullYear(), anchor.getMonth()-1, dayNum);
+      cells.push({date:d, other:true});
+    }
+    // Current month days
+    for(let i=1;i<=daysInMonth;i++) cells.push({date:new Date(anchor.getFullYear(), anchor.getMonth(), i), other:false});
+    // Trailing to fill 42 cells (6 weeks)
+    while(cells.length<42){
+      const last = cells[cells.length-1].date;
+      const d = new Date(last.getFullYear(), last.getMonth(), last.getDate()+1);
+      cells.push({date:d, other:d.getMonth()!==anchor.getMonth()});
+    }
+    const shifts = readShifts();
+    // Multi-day counting across span
+    const counts = {}; const dayDots = {};
+    shifts.forEach(s=>{
+      eachDaySpan(s).forEach(dayKey=>{
+        counts[dayKey] = (counts[dayKey]||0)+1;
+        (dayDots[dayKey] ||= []).push({userId:s.userId});
+      });
+    });
+    shiftCalendarEl.innerHTML = cells.map(c=>{
+      const key = fmtDate(c.date);
+      const count = counts[key]||0;
+      const sel = selectedDay===key ? ' selected' : '';
+      let dotsHtml='';
+      const dots = (dayDots[key]||[]).slice(0,6); // cap visible dots
+      if(dots.length){
+        dotsHtml = `<div class="multi-dot-wrap">${dots.map(d=>`<span class="shift-dot" style="background:${userColor(d.userId)}"></span>`).join('')}</div>`;
+      }
+      return `<div class="cal-day${c.other?' other-month':''}${sel}" data-day="${key}"><span class="d-num">${c.date.getDate()}</span>${count?`<span class="d-count" title="${count} shifts">${count}</span>`:''}${dotsHtml}</div>`;
+    }).join('');
+  }
+
+  function renderShifts(){
+    if(!shiftListEl) return;
+    const shifts = readShifts().sort((a,b)=> new Date(a.start)-new Date(b.start));
+    const uid = localStorage.getItem('demoUserId');
+    const filtered = selectedDay ? shifts.filter(s=> eachDaySpan(s).includes(selectedDay)) : shifts;
+    if(!filtered.length){ shiftListEl.innerHTML = '<div class="shift-empty">No shifts'+(selectedDay?` for ${selectedDay}`:'')+'.</div>'; return; }
+    shiftListEl.innerHTML = filtered.map(s=>{
+      const owned = s.userId===uid;
+      const startStr = new Date(s.start).toLocaleString();
+      const endStr = new Date(s.end).toLocaleString();
+      const dur = shiftDurationHours(s);
+      const color = userColor(s.userId);
+      return `<div class="shift-row" data-id="${s.id}"><div><div class="sr-times"><span class="sr-color-dot" style="background:${color}"></span>${startStr} - ${endStr} <span class="sr-dur">(${formatHours(dur)}h)</span></div><div class="sr-user">${owned?'You':escapeHtml(s.userName||'')}</div></div><div class="sr-actions">${owned?`<button data-action="edit-shift">Edit</button><button data-action="del-shift">Delete</button>`:''}</div></div>`;
+    }).join('');
+  }
+
+  function renderShiftSummary(){
+    if(!shiftSummaryEl) return;
+    const shifts = readShifts();
+    if(!shifts.length){ shiftSummaryEl.textContent='No scheduled hours.'; return; }
+    let total = 0; let dayTotal=0; let monthTotal=0;
+    const monthKey = calView.getFullYear()+'-'+String(calView.getMonth()+1).padStart(2,'0');
+    shifts.forEach(s=>{ const h=shiftDurationHours(s); total+=h; if(selectedDay && eachDaySpan(s).includes(selectedDay)) dayTotal+=h; if(s.start.startsWith(monthKey)) monthTotal+=h; });
+    const parts = [`Total: ${formatHours(total)}h`, `Month: ${formatHours(monthTotal)}h`];
+    if(selectedDay) parts.push(`Day: ${formatHours(dayTotal)}h`);
+    shiftSummaryEl.textContent = parts.join(' | ');
+  }
+
+  function renderShiftLegend(){
+    if(!shiftLegendEl) return;
+    const shifts = readShifts();
+    if(!shifts.length){ shiftLegendEl.innerHTML=''; return; }
+    const byUser = {};
+    shifts.forEach(s=>{ if(!byUser[s.userId]) byUser[s.userId]=s.userName||s.userId; });
+    const items = Object.keys(byUser).sort().map(uid=>`<div class="legend-item"><span class="legend-dot" style="background:${userColor(uid)}"></span>${escapeHtml(byUser[uid])}</div>`).join('');
+    shiftLegendEl.innerHTML = items;
+  }
+
+  function clearShiftForm(){ editingShiftIdInput && (editingShiftIdInput.value=''); shiftStartInput && (shiftStartInput.value=''); shiftEndInput && (shiftEndInput.value=''); }
+
+  function validateShift(startIso, endIso){
+    if(!startIso || !endIso) return 'Start and End required';
+    const s = new Date(startIso); const e = new Date(endIso);
+    if(isNaN(s)||isNaN(e)) return 'Invalid date';
+    if(e<=s) return 'End must be after Start';
+    return null;
+  }
+
+  if(addShiftBtn){
+    addShiftBtn.addEventListener('click', ()=>{
+      const startVal = shiftStartInput.value;
+      const endVal = shiftEndInput.value;
+      const err = validateShift(startVal, endVal);
+      if(err){ alert(err); return; }
+      const editing = editingShiftIdInput.value;
+      if(editing){ updateShift(editing, startVal, endVal); }
+      else { addShift(startVal, endVal); }
+      clearShiftForm(); renderCalendar(); renderShifts(); renderShiftSummary(); renderShiftLegend();
+    });
+  }
+  if(clearShiftFormBtn){ clearShiftFormBtn.addEventListener('click', ()=> clearShiftForm()); }
+  if(calPrevBtn){ calPrevBtn.addEventListener('click', ()=>{ calView = new Date(calView.getFullYear(), calView.getMonth()-1, 1); renderCalendar(); }); }
+  if(calNextBtn){ calNextBtn.addEventListener('click', ()=>{ calView = new Date(calView.getFullYear(), calView.getMonth()+1, 1); renderCalendar(); }); }
+  if(shiftCalendarEl){
+    shiftCalendarEl.addEventListener('click', e=>{
+      const cell = e.target.closest('.cal-day'); if(!cell) return;
+      selectedDay = cell.getAttribute('data-day');
+      renderCalendar(); renderShifts(); renderShiftSummary();
+    });
+  }
+  if(shiftListEl){
+    shiftListEl.addEventListener('click', e=>{
+      const row = e.target.closest('.shift-row'); if(!row) return;
+      const id = row.getAttribute('data-id');
+      if(e.target.matches('[data-action="edit-shift"]')){
+        const shifts = readShifts(); const s = shifts.find(x=>x.id===id); if(!s) return;
+        shiftStartInput.value = s.start.slice(0,16);
+        shiftEndInput.value = s.end.slice(0,16);
+        editingShiftIdInput.value = s.id;
+      } else if(e.target.matches('[data-action="del-shift"]')){
+        if(confirm('Delete this shift?')){ deleteShift(id); renderCalendar(); renderShifts(); renderShiftSummary(); renderShiftLegend(); }
+      }
+    });
+  }
+
+  window.addEventListener('userchange', ()=>{
+    // Refresh shift ownership display
+    if(role==='expert') { renderShifts(); renderCalendar(); renderShiftSummary(); renderShiftLegend(); }
+  });
+
+  // Initial legend/summary if shifts tab already active
+  if(role==='expert' && shiftsPanel){ renderShiftSummary(); renderShiftLegend(); }
 
   // --- Expert Enhancements State ---
   let __reportRowCache = null; // { rows: [...], ts: Date }

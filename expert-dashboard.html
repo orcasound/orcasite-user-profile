@@ -24,12 +24,18 @@
 
   <main class="container single-col">
     <h2>Expert User Dashboard</h2>
-    <div class="dash-sections">
-      <section class="dash-panel" id="aggregateMetricsPanel">
-        <h3>Aggregate Metrics</h3>
-        <div class="panel-body" id="aggregateMetricsBody">Loading...</div>
-      </section>
-      <section class="dash-panel" id="userReportsManagePanel">
+    <nav class="dash-tabs" id="expertDashTabs">
+      <button class="dash-tab active" data-tab="reportsTab">Reporting Candidates</button>
+      <button class="dash-tab" data-tab="shiftsTab">Listening Shifts</button>
+    </nav>
+    <div class="tab-panes">
+      <div class="tab-pane active" id="reportsTab">
+        <div class="dash-sections">
+          <section class="dash-panel" id="aggregateMetricsPanel">
+            <h3>Aggregate Metrics</h3>
+            <div class="panel-body" id="aggregateMetricsBody">Loading...</div>
+          </section>
+          <section class="dash-panel" id="userReportsManagePanel">
         <h3>User Reports Management</h3>
         <div class="filter-bar" id="reportManageFilters">
           <label>Type:
@@ -59,15 +65,40 @@
         </div>
         <div class="panel-body" id="userReportsManageList">Loading...</div>
       </section>
-      <section class="dash-panel" id="candidateReportsPanel">
+          <section class="dash-panel" id="candidateReportsPanel">
         <h3>Candidate Reports</h3>
         <div class="candidate-tools"><button class="mini-btn" id="exportCandidatesBtn">Export JSON</button></div>
         <div class="panel-body" id="candidateReportsList">Loading...</div>
       </section>
-      <section class="dash-panel" id="activityPanel">
+          <section class="dash-panel" id="activityPanel">
         <h3>Recent Activity</h3>
         <div class="panel-body" id="activityList">Loading...</div>
       </section>
+        </div>
+      </div>
+      <div class="tab-pane" id="shiftsTab">
+        <section class="dash-panel" id="listeningShiftsPanel">
+          <h3>Listening Shifts</h3>
+          <div class="shift-controls">
+            <div class="shift-form" id="shiftForm">
+              <label>Start: <input type="datetime-local" id="shiftStart" /></label>
+              <label>End: <input type="datetime-local" id="shiftEnd" /></label>
+              <button id="addShiftBtn">Add Shift</button>
+              <button id="clearShiftFormBtn" type="button" class="secondary">Clear</button>
+              <input type="hidden" id="editingShiftId" />
+            </div>
+            <div class="calendar-nav">
+              <button id="calPrevBtn" type="button">◀</button>
+              <span id="calMonthLabel"></span>
+              <button id="calNextBtn" type="button">▶</button>
+            </div>
+            <div class="calendar-grid" id="shiftCalendar">Loading calendar...</div>
+          </div>
+          <div class="panel-body" id="shiftList">No shifts yet.</div>
+          <div class="shift-summary" id="shiftSummary"></div>
+          <div class="shift-legend" id="shiftLegend"></div>
+        </section>
+      </div>
     </div>
   </main>
 
