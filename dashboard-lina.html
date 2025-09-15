@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Lina Dashboard — OrcaSound Prototype</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="landing-dark" data-fixed-user="pub_lina">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="conservancy" href="https://orcasound.net/" target="_blank">ORCA CONSERVANCY</a>
+      <div id="authControls" class="auth-controls"></div>
+    </div>
+  </header>
+  <nav class="subnav">
+    <div class="subnav-inner">
+      <a href="index.html">Orcasound</a>
+      <a href="hydrophones.html">Hydrophones</a>
+      <a href="explore.html">Explore</a>
+      <a href="take-action.html">Take action</a>
+    </div>
+  </nav>
+
+  <main class="container single-col">
+    <h2>Lina's Dashboard</h2>
+    <section class="scoreboard" id="scoreBoard">
+      <div class="metric" id="mComments"><span class="num">0</span><span class="label">Comments</span></div>
+      <div class="metric" id="mReports"><span class="num">0</span><span class="label">Reports</span></div>
+      <div class="metric" id="mChecked"><span class="num">0</span><span class="label">Audio Checked</span></div>
+      <div class="metric" id="mTags"><span class="num">0</span><span class="label">Unique Tags</span></div>
+      <div class="metric total" id="mScore"><span class="num">0</span><span class="label">Score</span></div>
+    </section>
+    <section class="triple-grid">
+      <div class="triple-col" id="colReports">
+        <h3 class="tri-title">Your Reports</h3>
+        <div class="tri-body" id="userReports">Loading...</div>
+      </div>
+      <div class="triple-col" id="colComments">
+        <h3 class="tri-title">Your Comments</h3>
+        <div class="tri-body" id="commentList">Loading...</div>
+      </div>
+      <div class="triple-col" id="colFavorites">
+        <h3 class="tri-title">Favorites</h3>
+        <div class="tri-body" id="favList">Loading...</div>
+      </div>
+    </section>
+    <section class="dash-panel" id="activityPanel">
+      <h3>Recent Activity</h3>
+      <div class="panel-body" id="activityList">Loading...</div>
+    </section>
+  </main>
+
+  <footer class="site-footer"><div>Prototype — not a production site.</div></footer>
+  <script>/* Auto-set fixed user (Lina) */
+  (function(){
+    const targetId='pub_lina';
+    if(localStorage.getItem('demoUserId')!==targetId){
+      localStorage.setItem('demoUserId', targetId);
+      localStorage.setItem('demoUserName', 'Lina Chen');
+      localStorage.setItem('demoUserRole', 'public');
+    }
+  })();
+  </script>
+  <script src="js/activity.js" defer></script>
+  <script src="js/app.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <script src="js/dashboard.js" defer></script>
+</body>
+</html>

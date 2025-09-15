@@ -1,0 +1,161 @@
+{
+  "audios": [
+    {
+      "id": "a1",
+      "title": "Sunset Bay - Dawn clicks",
+  "location": "Beach Camp at Sunset Bay",
+  "site": "sunset_bay",
+      "recordedAt": "2025-09-14T11:05:00Z",
+      "tags": ["whales","ai_whales"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+    },
+    {
+      "id": "a2",
+      "title": "Lab stream - distant vessel",
+  "location": "Orcasound Lab",
+  "site": "orcasound_lab",
+      "recordedAt": "2025-09-14T12:22:10Z",
+      "tags": ["vessel"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
+    },
+    {
+      "id": "a3",
+      "title": "Port Townsend - possible pod",
+  "location": "Port Townsend",
+  "site": "port_townsend",
+      "recordedAt": "2025-09-13T19:44:33Z",
+      "tags": ["whales"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
+    },
+    {
+      "id": "a4",
+      "title": "Bush Point - background noise",
+  "location": "Bush Point",
+  "site": "bush_point",
+      "recordedAt": "2025-09-12T03:15:45Z",
+      "tags": ["other"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3"
+    }
+    ,{
+      "id": "a5",
+      "title": "Sunset Bay - faint whistles",
+  "location": "Beach Camp at Sunset Bay",
+  "site": "sunset_bay",
+      "recordedAt": "2025-09-14T11:32:05Z",
+      "tags": ["whales"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3"
+    },{
+      "id": "a6",
+      "title": "Lab stream - surface splash",
+  "location": "Orcasound Lab",
+  "site": "orcasound_lab",
+      "recordedAt": "2025-09-14T12:40:12Z",
+      "tags": ["other"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3"
+    },{
+      "id": "a7",
+      "title": "Port Townsend - rapid clicks",
+  "location": "Port Townsend",
+  "site": "port_townsend",
+      "recordedAt": "2025-09-13T20:02:11Z",
+      "tags": ["whales","ai_whales"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3"
+    },{
+      "id": "a8",
+      "title": "Bush Point - passing vessel",
+  "location": "Bush Point",
+  "site": "bush_point",
+      "recordedAt": "2025-09-12T04:05:03Z",
+      "tags": ["vessel"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3"
+    },{
+      "id": "a9",
+      "title": "Sunset Bay - quiet background",
+  "location": "Beach Camp at Sunset Bay",
+  "site": "sunset_bay",
+      "recordedAt": "2025-09-14T11:50:44Z",
+      "tags": ["other"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3"
+    },{
+      "id": "a10",
+      "title": "Lab stream - mechanical hum",
+  "location": "Orcasound Lab",
+  "site": "orcasound_lab",
+      "recordedAt": "2025-09-14T12:55:27Z",
+      "tags": ["vessel"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3"
+    },{
+      "id": "a11",
+      "title": "Port Townsend - distant calls",
+  "location": "Port Townsend",
+  "site": "port_townsend",
+      "recordedAt": "2025-09-13T20:22:33Z",
+      "tags": ["whales"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3"
+    },{
+      "id": "a12",
+      "title": "Bush Point - rain on surface",
+  "location": "Bush Point",
+  "site": "bush_point",
+      "recordedAt": "2025-09-12T05:12:19Z",
+      "tags": ["other"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3"
+    },{
+      "id": "a13",
+      "title": "Sunset Bay - pod chatter",
+  "location": "Beach Camp at Sunset Bay",
+  "site": "sunset_bay",
+      "recordedAt": "2025-09-14T12:04:02Z",
+      "tags": ["whales","ai_whales"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3"
+    },{
+      "id": "a14",
+      "title": "Lab stream - equipment ping",
+  "location": "Orcasound Lab",
+  "site": "orcasound_lab",
+      "recordedAt": "2025-09-14T13:05:45Z",
+      "tags": ["other"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-14.mp3"
+    },{
+      "id": "a15",
+      "title": "Port Townsend - strong call sequence",
+  "location": "Port Townsend",
+  "site": "port_townsend",
+      "recordedAt": "2025-09-13T21:05:55Z",
+      "tags": ["whales"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3"
+    },{
+      "id": "a16",
+      "title": "Bush Point - low vessel rumble",
+  "location": "Bush Point",
+  "site": "bush_point",
+      "recordedAt": "2025-09-12T06:25:14Z",
+      "tags": ["vessel"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3"
+    },{
+      "id": "a17",
+      "title": "Sunset Bay - quiet interval",
+  "location": "Beach Camp at Sunset Bay",
+  "site": "sunset_bay",
+      "recordedAt": "2025-09-14T12:20:21Z",
+      "tags": ["other"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-17.mp3"
+    },{
+      "id": "a18",
+      "title": "Lab stream - rapid clicks (AI)",
+  "location": "Orcasound Lab",
+  "site": "orcasound_lab",
+      "recordedAt": "2025-09-14T13:18:37Z",
+      "tags": ["whales","ai_whales"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-18.mp3"
+    },{
+      "id": "a19",
+      "title": "Port Townsend - mixed pod calls",
+  "location": "Port Townsend",
+  "site": "port_townsend",
+      "recordedAt": "2025-09-13T21:30:48Z",
+      "tags": ["whales"],
+      "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+    }
+  ]
+}

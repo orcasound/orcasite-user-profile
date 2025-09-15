@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>OrcaSound — Prototype</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="landing-dark">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="conservancy" href="https://orcasound.net/" target="_blank">ORCA CONSERVANCY</a>
+      <div id="authControls" class="auth-controls"></div>
+    </div>
+  </header>
+  <nav class="subnav">
+    <div class="subnav-inner">
+      <a href="index.html" class="active">Orcasound</a>
+      <a href="hydrophones.html">Hydrophones</a>
+      <a href="explore.html">Explore</a>
+      <a href="take-action.html">Take action</a>
+    </div>
+  </nav>
+
+  <main class="hero">
+    <div class="hero-inner">
+      <h1>OrcaSound — Prototype</h1>
+      <p>Prototype landing page for testing audio-listening UI and tagging features. Use the Hydrophones page to listen to sample recordings.</p>
+      <p><a class="primary" href="hydrophones.html">Go to Hydrophones</a></p>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div>Prototype — not a production site. Built for testing features.</div>
+  </footer>
+
+  <!-- Auth Modal -->
+  <div id="authModal" class="auth-modal hidden" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+    <div class="auth-modal-content">
+      <h3 id="authModalTitle">Sign In</h3>
+      <p>Select a user type for the demo:</p>
+      <div class="auth-role-buttons">
+        <button data-role="public" class="role-btn">Public User</button>
+        <button data-role="expert" class="role-btn">Expert User</button>
+      </div>
+      <button class="close-auth" data-close>Close</button>
+    </div>
+  </div>
+
+  <script src="js/activity.js" defer></script>
+  <script src="js/app.js" defer></script>
+  <script src="js/auth.js" defer></script>
+</body>
+</html>

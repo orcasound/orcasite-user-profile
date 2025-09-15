@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Expert Dashboard — OrcaSound Prototype</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="landing-dark">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="conservancy" href="https://orcasound.net/" target="_blank">ORCA CONSERVANCY</a>
+      <div id="authControls" class="auth-controls"></div>
+    </div>
+  </header>
+  <nav class="subnav">
+    <div class="subnav-inner">
+      <a href="index.html">Orcasound</a>
+      <a href="hydrophones.html">Hydrophones</a>
+      <a href="explore.html">Explore</a>
+      <a href="take-action.html">Take action</a>
+    </div>
+  </nav>
+
+  <main class="container single-col">
+    <h2>Expert User Dashboard</h2>
+    <div class="dash-sections">
+      <section class="dash-panel" id="aggregateMetricsPanel">
+        <h3>Aggregate Metrics</h3>
+        <div class="panel-body" id="aggregateMetricsBody">Loading...</div>
+      </section>
+      <section class="dash-panel" id="userReportsManagePanel">
+        <h3>User Reports Management</h3>
+        <div class="filter-bar" id="reportManageFilters">
+          <label>Type:
+            <select id="manageTypeFilter">
+              <option value="all">All</option>
+              <option value="whale">Whale</option>
+              <option value="vessel">Vessel</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label>Sort:
+            <select id="manageSort">
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="type">Type</option>
+            </select>
+          </label>
+          <label><input type="checkbox" id="groupByType" /> Group by type</label>
+          <label>Search: <input type="text" id="manageSearch" placeholder="text or mm:ss" /></label>
+        </div>
+        <div class="batch-bar" id="manageBatchBar">
+          <button class="mini-btn" id="batchSelectAll">Select All</button>
+          <button class="mini-btn" id="batchClear">Clear</button>
+          <button class="mini-btn" id="batchCandidate">Mark Candidate</button>
+          <button class="mini-btn" id="batchUncandidate">Unmark Candidate</button>
+          <button class="mini-btn" id="batchConfirmReports">Batch Confirm</button>
+        </div>
+        <div class="panel-body" id="userReportsManageList">Loading...</div>
+      </section>
+      <section class="dash-panel" id="candidateReportsPanel">
+        <h3>Candidate Reports</h3>
+        <div class="candidate-tools"><button class="mini-btn" id="exportCandidatesBtn">Export JSON</button></div>
+        <div class="panel-body" id="candidateReportsList">Loading...</div>
+      </section>
+      <section class="dash-panel" id="activityPanel">
+        <h3>Recent Activity</h3>
+        <div class="panel-body" id="activityList">Loading...</div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer"><div>Prototype — not a production site.</div></footer>
+  <script src="js/activity.js" defer></script>
+  <script src="js/app.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <script src="js/dashboard.js" defer></script>
+</body>
+</html>
