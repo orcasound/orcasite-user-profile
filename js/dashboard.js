@@ -50,6 +50,7 @@
   const shiftSummaryEl = document.getElementById('shiftSummary');
   const shiftLegendEl = document.getElementById('shiftLegend');
   const tabsNav = document.getElementById('expertDashTabs');
+  const publicTabsNav = document.getElementById('publicDashTabs');
 
   // --- Tab Navigation ---
   if(tabsNav){
@@ -60,6 +61,38 @@
       document.querySelectorAll('.dash-tab').forEach(b=>b.classList.toggle('active', b===btn));
       document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active', p.id===target));
       if(target==='shiftsTab' && role==='expert'){ renderCalendar(); renderShifts(); }
+      if(target==='confirmedTab' && role==='expert'){
+        // Re-render candidate reports for confirmed tab
+        renderCandidateReportsFromCache();
+        // Activity mirror only (metrics clone removed)
+        mirrorActivity();
+      }
+      if(target==='expertMyDataTab' && role==='expert'){
+        // Refresh personal data panels when switching to My Data
+        if(__audiosCache){
+          renderUserReports(__audiosCache);
+          renderComments(__audiosCache);
+          renderFavorites(__audiosCache);
+          renderScoreboard(__audiosCache);
+          renderActivity();
+        }
+      }
+    });
+  }
+  if(publicTabsNav){
+    publicTabsNav.addEventListener('click', e=>{
+      const btn = e.target.closest('.dash-tab'); if(!btn) return;
+      const target = btn.getAttribute('data-tab');
+      publicTabsNav.querySelectorAll('.dash-tab').forEach(b=>b.classList.toggle('active', b===btn));
+      document.querySelectorAll('.tab-pane').forEach(p=>{
+        // Limit to panes that belong to public dashboard (id starts with public)
+        if(p.id.startsWith('public')){
+          p.classList.toggle('active', p.id===target);
+        }
+      });
+      if(target==='publicConfirmedTab'){
+        renderCandidateReportsFromCache();
+      }
     });
   }
 
@@ -289,6 +322,7 @@
   fetch('sample-audio.json').then(r=>r.json()).then(data=>{
     const audios = (data && data.audios) || [];
     __audiosCache = audios;
+    buildAudioMap(audios);
   updateDashboardTitle();
   renderFavorites(audios);
   renderComments(audios);
@@ -297,6 +331,9 @@
     renderManageReports(audios);
     renderCandidateReports(audios);
     renderAggregateMetrics(audios);
+  } else {
+    // Public still needs candidate reports list (confirmed) when switching tabs
+    renderCandidateReports(audios);
   }
   renderScoreboard(audios);
   renderStats(audios); // legacy optional
@@ -349,7 +386,12 @@
   }
   function saveConfirmStore(obj){ localStorage.setItem('reportConfirmations', JSON.stringify(obj)); }
   function getConfirmation(commentId){ const store = confirmStore(); return store[commentId]||null; }
-  function setConfirmation(commentId, data){ const store=confirmStore(); store[commentId]=data; saveConfirmStore(store); }
+  function setConfirmation(commentId, data){
+    const store = confirmStore();
+    const uid = localStorage.getItem('demoUserId') || null;
+    store[commentId] = { ...data, confirmerUserId: data.confirmerUserId || uid };
+    saveConfirmStore(store);
+  }
   function formatDate(iso){ if(!iso) return ''; try { const d=new Date(iso); if(isNaN(d)) return ''; const pad=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; } catch(e){return ''} }
   function isApproved(id){ return localStorage.getItem('approved:'+id)==='1'; }
   function setApproved(id){ localStorage.setItem('approved:'+id,'1'); }
@@ -603,6 +645,11 @@
     // total comments
     const currentUserId = localStorage.getItem('demoUserId');
     let totalComments = 0; let totalReports = 0; const tagSet = new Set();
+    // confirmations count for this user
+    let confirmedCount = 0; try {
+      const confStore = JSON.parse(localStorage.getItem('reportConfirmations')||'{}');
+      Object.keys(confStore).forEach(k=>{ const c=confStore[k]; if(currentUserId && c && c.confirmerUserId===currentUserId) confirmedCount++; });
+    } catch(e){ /* ignore */ }
     audios.forEach(a=>{ 
       const cs = readComments(a.id).filter(c=> !currentUserId || c.userId===currentUserId);
       if(cs.length){ totalComments += cs.length; a.tags && a.tags.forEach(t=>tagSet.add(t)); }
@@ -611,6 +658,8 @@
     });
     const mReportsEl = document.getElementById('mReports')?.querySelector('.num');
     if(mReportsEl) mReportsEl.textContent = totalReports;
+    const mConfirmedEl = document.getElementById('mConfirmed')?.querySelector('.num');
+    if(mConfirmedEl) mConfirmedEl.textContent = confirmedCount;
     // viewed clips (per-user key)
     let viewed = [];
     try { viewed = JSON.parse(localStorage.getItem('viewedClips:'+(currentUserId||'anon'))||'[]'); } catch(e){ viewed=[]; }
@@ -618,8 +667,8 @@
     mComments.textContent = totalComments;
     mChecked.textContent = viewed.length;
     mTags.textContent = tagSet.size;
-    // Score formula updated: comments + reports + viewed + tags
-    const score = totalComments + totalReports + viewed.length + tagSet.size;
+  // Score formula: comments + reports + viewed + tags + (confirmations * 3)
+  const score = totalComments + totalReports + viewed.length + tagSet.size + (confirmedCount * 3);
     mScore.textContent = score;
   }
 
@@ -754,6 +803,12 @@
       html = filtered.map(renderManageRow).join('');
     }
     manageListEl.innerHTML = `<div class="manage-report-list">${html}</div>`;
+    // Reselect previously selected report if still present
+    if(window.__selectedReportId){
+      const sel = manageListEl.querySelector(`.manage-row[data-report="${window.__selectedReportId}"]`);
+      if(sel) sel.classList.add('selected'); else window.__selectedReportId=null;
+    }
+    renderReportDetail();
   }
 
   function renderManageRow(r){
@@ -771,29 +826,407 @@
     </div>`;
   }
 
+  // --- Detail Panel & Audio Controls ---
+  function pseudoRandom(seed){ let x = seed & 0xffffffff; return ()=>{ x = (1103515245 * x + 12345) & 0x7fffffff; return x/0x7fffffff; }; }
+  function buildWaveformBars(clipId){
+    if(!clipId) return '<div class="waveform-empty">No audio</div>';
+    const audioObj = window.__audioMap && window.__audioMap[clipId];
+    if(!audioObj) return '<div class="waveform-empty">Audio not found</div>';
+    const pr = pseudoRandom(clipId.split('').reduce((a,c)=>a+c.charCodeAt(0),0));
+    const bars = Array.from({length:80}, ()=>{ const h=Math.max(4,Math.floor(pr()*100)); return `<div class="waveform-bar" style="height:${h}%"></div>`; }).join('');
+    return `<div class="waveform-wrap">${bars}</div>`;
+  }
+  function getSelectedReportData(){
+    if(!window.__selectedReportId || !__audiosCache) return null;
+    const all = aggregateAllUserReports(__audiosCache);
+    return all.find(r=> r.id === window.__selectedReportId) || null;
+  }
+  function renderReportDetail(){
+    const container = document.getElementById('reportDetailBody'); if(!container) return;
+    const data = getSelectedReportData();
+    if(!data){ container.innerHTML='<div class="detail-placeholder">Select a report to view audio and details.</div>'; return; }
+    const audioObj = window.__audioMap && window.__audioMap[data.clipId];
+    const audioUrl = audioObj ? audioObj.url : null;
+    const timeVal = data.at || '';
+    const lastRate = parseFloat(localStorage.getItem('detailAudio:lastRate')||'1')||1;
+    container.innerHTML = `
+      ${audioUrl?`<audio id="detailAudioEl" src="${audioUrl}" data-clip="${data.clipId}"></audio>`:'<div class="waveform-empty">No audio URL</div>'}
+      ${audioUrl?`<div class="audio-controls" aria-label="Custom audio controls">
+        <button type="button" class="ac-btn" data-ac="play" aria-label="Play/Pause">▶</button>
+        <button type="button" class="ac-btn" data-ac="back5" aria-label="Back 5 seconds">⏪5</button>
+        <button type="button" class="ac-btn" data-ac="fwd5" aria-label="Forward 5 seconds">5⏩</button>
+        <div class="ac-time" aria-live="off"><span class="ac-cur">0:00</span> / <span class="ac-dur">0:00</span></div>
+        <label class="ac-rate-label">Rate
+          <select class="ac-rate" aria-label="Playback rate">
+            <option value="0.75" ${lastRate===0.75?'selected':''}>0.75x</option>
+            <option value="1" ${lastRate===1?'selected':''}>1x</option>
+            <option value="1.25" ${lastRate===1.25?'selected':''}>1.25x</option>
+            <option value="1.5" ${lastRate===1.5?'selected':''}>1.5x</option>
+            <option value="2" ${lastRate===2?'selected':''}>2x</option>
+          </select>
+        </label>
+        <label class="ac-vol-label">Vol
+          <input type="range" class="ac-vol" min="0" max="1" step="0.01" value="1" aria-label="Volume" />
+        </label>
+        <div class="ac-progress-wrap" aria-label="Seek" role="slider" tabindex="0" data-progress>
+          <div class="ac-progress-bar"><div class="ac-progress-fill" style="width:0%"></div></div>
+        </div>
+        <button type="button" class="ac-btn" id="jumpReportTimeBtn" title="Jump to saved report time" ${timeVal?'':'disabled'}>Jump at</button>
+        <button type="button" class="ac-btn" id="loopClearBtn" title="Clear loop" disabled>Loop ✖</button>
+      </div>`:''}
+      <div class="time-edit"><label>Time (mm:ss): <input type="text" id="detailTimeInput" value="${escapeHtml(timeVal)}" placeholder="mm:ss" maxlength="8" /></label><button id="detailTimeSaveBtn" type="button">Save Time</button></div>
+      <div class="detail-waveform" id="detailWaveform" data-clip="${data.clipId}">${buildWaveformBars(data.clipId)}</div>
+      <div class="detail-meta-block">${buildDetailMetadata(data)}</div>
+    `;
+    // Save time handler
+    const saveBtn = document.getElementById('detailTimeSaveBtn');
+    if(saveBtn){ saveBtn.addEventListener('click', ()=>{ const inp=document.getElementById('detailTimeInput'); const v=inp.value.trim(); if(v && !/^\d{1,2}:[0-5]\d$/.test(v)){ alert('Time must be mm:ss'); return; } const d=getSelectedReportData(); if(!d) return; const list=readUserReports(d.clipId); const r=list.find(x=>x.id===d.id); if(r){ r.at=v||''; saveUserReports(d.clipId,list); renderManageReportsFromCache(); renderCandidateReportsFromCache(); } }); }
+    const audioEl = document.getElementById('detailAudioEl');
+    if(audioEl){
+      const btnPlay = container.querySelector('[data-ac="play"]');
+      const btnBack5 = container.querySelector('[data-ac="back5"]');
+      const btnFwd5 = container.querySelector('[data-ac="fwd5"]');
+      const rateSel = container.querySelector('.ac-rate');
+      const volRange = container.querySelector('.ac-vol');
+      const curSpan = container.querySelector('.ac-cur');
+      const durSpan = container.querySelector('.ac-dur');
+      const progressWrap = container.querySelector('[data-progress]');
+      const progressFill = container.querySelector('.ac-progress-fill');
+      const fmt = s=>{ if(!isFinite(s)) return '0:00'; const m=Math.floor(s/60); const sec=Math.floor(s%60); return m+':'+String(sec).padStart(2,'0'); };
+      function updateTime(){ curSpan.textContent=fmt(audioEl.currentTime); if(audioEl.duration) progressFill.style.width=(audioEl.currentTime/audioEl.duration)*100+'%'; }
+      audioEl.addEventListener('loadedmetadata', ()=>{ durSpan.textContent=fmt(audioEl.duration); updateTime(); });
+      audioEl.addEventListener('timeupdate', updateTime);
+      audioEl.addEventListener('ended', ()=>{ btnPlay.textContent='▶'; });
+      btnPlay && btnPlay.addEventListener('click', ()=>{ if(audioEl.paused){ audioEl.play(); btnPlay.textContent='⏸'; } else { audioEl.pause(); btnPlay.textContent='▶'; } });
+      btnBack5 && btnBack5.addEventListener('click', ()=>{ audioEl.currentTime=Math.max(0,audioEl.currentTime-5); });
+      btnFwd5 && btnFwd5.addEventListener('click', ()=>{ audioEl.currentTime=Math.min(audioEl.duration||audioEl.currentTime+5,audioEl.currentTime+5); });
+      audioEl.playbackRate = lastRate;
+      rateSel && rateSel.addEventListener('change', ()=>{ audioEl.playbackRate=parseFloat(rateSel.value)||1; localStorage.setItem('detailAudio:lastRate', String(audioEl.playbackRate)); });
+      volRange && volRange.addEventListener('input', ()=>{ audioEl.volume=parseFloat(volRange.value); });
+      function seekFromClientX(clientX){ const rect=progressWrap.getBoundingClientRect(); const pct=Math.min(1,Math.max(0,(clientX-rect.left)/rect.width)); audioEl.currentTime=pct*(audioEl.duration||0); }
+      progressWrap && progressWrap.addEventListener('click', e=>seekFromClientX(e.clientX));
+      progressWrap && progressWrap.addEventListener('keydown', e=>{ if(e.key==='ArrowLeft'){ audioEl.currentTime=Math.max(0,audioEl.currentTime-1); } else if(e.key==='ArrowRight'){ audioEl.currentTime=Math.min(audioEl.duration||audioEl.currentTime+1,audioEl.currentTime+1); } });
+      let dragging=false; progressWrap && progressWrap.addEventListener('mousedown', e=>{ dragging=true; seekFromClientX(e.clientX); }); window.addEventListener('mousemove', e=>{ if(dragging) seekFromClientX(e.clientX); }); window.addEventListener('mouseup', ()=>{ dragging=false; });
+      const jumpBtn=document.getElementById('jumpReportTimeBtn'); if(jumpBtn && timeVal){ jumpBtn.addEventListener('click', ()=>{ const parts=timeVal.split(':'); if(parts.length===2){ const t=parseInt(parts[0],10)*60+parseInt(parts[1],10); if(isFinite(t)) audioEl.currentTime=Math.min(audioEl.duration||t,t); } }); }
+      // Loop markers
+      let loopStartIdx=null, loopEndIdx=null; const waveform=document.getElementById('detailWaveform'); const bars=waveform?Array.from(waveform.querySelectorAll('.waveform-bar')):[]; const loopClearBtn=document.getElementById('loopClearBtn');
+      function clearLoop(){ loopStartIdx=null; loopEndIdx=null; bars.forEach(b=>b.classList.remove('loop-range','loop-start','loop-end')); loopClearBtn && (loopClearBtn.disabled=true); }
+      function applyLoop(){ bars.forEach((b,i)=>{ b.classList.toggle('loop-range', loopStartIdx!=null && loopEndIdx!=null && i>=loopStartIdx && i<=loopEndIdx); b.classList.toggle('loop-start', i===loopStartIdx); b.classList.toggle('loop-end', i===loopEndIdx); }); loopClearBtn && (loopClearBtn.disabled=!(loopStartIdx!=null && loopEndIdx!=null)); }
+      bars.forEach((bar,i)=>{ bar.addEventListener('click', ()=>{ if(loopStartIdx==null){ loopStartIdx=i; } else if(loopEndIdx==null){ loopEndIdx=i; if(loopEndIdx<loopStartIdx){ [loopStartIdx,loopEndIdx]=[loopEndIdx,loopStartIdx]; } } else { loopStartIdx=i; loopEndIdx=null; } applyLoop(); }); });
+      loopClearBtn && loopClearBtn.addEventListener('click', clearLoop);
+      audioEl.addEventListener('timeupdate', ()=>{ if(loopStartIdx!=null && loopEndIdx!=null && audioEl.duration){ const startTime=(loopStartIdx/bars.length)*audioEl.duration; const endTime=(loopEndIdx/bars.length)*audioEl.duration; if(audioEl.currentTime> endTime + 0.05){ audioEl.currentTime=startTime; } }});
+      audioEl.addEventListener('loadedmetadata', ()=>{ const dur=audioEl.duration||0; bars.forEach((bar,i)=>{ const t=(i/bars.length)*dur; const m=Math.floor(t/60); const s=Math.floor(t%60); bar.title=m+':'+String(s).padStart(2,'0'); }); });
+    }
+  }
+
+  function buildDetailMetadata(report){
+    const audioObj = window.__audioMap && window.__audioMap[report.clipId];
+    if(!audioObj) return '<div class="meta-empty">No metadata</div>';
+    const rec = audioObj.recordedAt ? new Date(audioObj.recordedAt) : null;
+    const recStr = rec ? rec.toLocaleString(undefined,{ dateStyle:'medium', timeStyle:'short'}) : 'Unknown time';
+    const tags = (audioObj.tags||[]).map(t=>`<span class="wf-tag">${escapeHtml(t)}</span>`).join('');
+    return `
+      <div class="wf-title">${escapeHtml(audioObj.title||report.location||report.clipId)}</div>
+      <div class="wf-sub">${escapeHtml(audioObj.location||'Unknown location')} • ${recStr}</div>
+      <div class="wf-tags">${tags || '<span class=\"wf-tag empty\">no tags</span>'}</div>
+    `;
+  }
+
+  document.addEventListener('click', e=>{
+    if(role!=='expert') return;
+    const row = e.target.closest('.manage-row');
+    if(row && row.getAttribute('data-report')){
+      window.__selectedReportId = row.getAttribute('data-report');
+      document.querySelectorAll('.manage-row.selected').forEach(r=>r.classList.remove('selected'));
+      row.classList.add('selected');
+      renderReportDetail();
+    }
+  });
+
   function renderCandidateReports(audios){
-    if(role!=='expert' || !candidateListEl) return;
     const cStore = candidateStore();
     const list = Object.keys(cStore).map(id=>({ id, ...cStore[id] }));
-    if(!list.length){ candidateListEl.innerHTML='<div class="empty">No candidate reports.</div>'; return; }
-    // Group by type
-    const groups={}; list.forEach(r=>{ const t=r.type||'other'; (groups[t]=groups[t]||[]).push(r); });
-    let html='';
-    Object.keys(groups).sort().forEach(t=>{
-      html += `<div class="group-head">${t.charAt(0).toUpperCase()+t.slice(1)}</div>` + groups[t].sort((a,b)=> new Date(b.ts)-new Date(a.ts)).map(r=>{
-        const conf = getConfirmation(r.id);
-        const confBadge = conf ? `<span class=\"confirm-badge\" title=\"${conf.category} (conf ${conf.confidence})\">${conf.category}</span>` : '';
-        return `<div class="candidate-row" data-report="${r.id}" data-clip="${r.clipId}">
-          <div><a href="hydrophones.html#${r.clipId}">${escapeHtml(r.clipId)}</a> <span class="cand-time">${formatDate(r.ts)}</span> <span class="cand-type ${r.type}">${escapeHtml(r.type)}</span>${confBadge}${r.at?` <span class=\"cand-at\">[${escapeHtml(r.at)}]</span>`:''}<br>${escapeHtml(r.text||'')}</div>
-          <div class="cand-actions"><button class="mini-btn" data-action="candidate-report" data-source="candidate-list">Unmark</button></div>
-        </div>`;
-      }).join('');
-    });
-    candidateListEl.innerHTML = `<div class="candidate-report-list">${html}</div>`;
+    // Expert list (with actions)
+    if(candidateListEl){
+      if(!list.length){ candidateListEl.innerHTML='<div class="empty">No candidate reports.</div>'; }
+      else {
+        const groups={}; list.forEach(r=>{ const t=r.type||'other'; (groups[t]=groups[t]||[]).push(r); });
+        let html='';
+        Object.keys(groups).sort().forEach(t=>{
+          html += `<div class="group-head">${t.charAt(0).toUpperCase()+t.slice(1)}</div>` + groups[t].sort((a,b)=> new Date(b.ts)-new Date(a.ts)).map(r=>{
+            const conf = getConfirmation(r.id);
+            const confBadge = conf ? `<span class=\"confirm-badge\" title=\"${conf.category} (conf ${conf.confidence})\">${conf.category}</span>` : '';
+            return `<div class="candidate-row" data-report="${r.id}" data-clip="${r.clipId}">
+              <div><a href="hydrophones.html#${r.clipId}">${escapeHtml(r.clipId)}</a> <span class="cand-time">${formatDate(r.ts)}</span> <span class="cand-type ${r.type}">${escapeHtml(r.type)}</span>${confBadge}${r.at?` <span class=\"cand-at\">[${escapeHtml(r.at)}]</span>`:''}<br>${escapeHtml(r.text||'')}</div>
+              <div class="cand-actions"><button class="mini-btn" data-action="candidate-report" data-source="candidate-list">Unmark</button></div>
+            </div>`;
+          }).join('');
+        });
+        candidateListEl.innerHTML = `<div class="candidate-report-list">${html}</div>`;
+      }
+    }
+    // Public confirmed candidates list (read-only)
+    const publicListEl = document.getElementById('publicCandidateReportsList');
+    if(publicListEl){
+      if(!list.length){ publicListEl.innerHTML='<div class="empty">No confirmed candidate reports yet.</div>'; }
+      else {
+        const groups2={}; list.forEach(r=>{ const t=r.type||'other'; (groups2[t]=groups2[t]||[]).push(r); });
+        let html2='';
+        Object.keys(groups2).sort().forEach(t=>{
+          html2 += `<div class="group-head">${t.charAt(0).toUpperCase()+t.slice(1)}</div>` + groups2[t].sort((a,b)=> new Date(b.ts)-new Date(a.ts)).map(r=>{
+            const conf = getConfirmation(r.id);
+            const confBadge = conf ? `<span class=\"confirm-badge\" title=\"${conf.category} (conf ${conf.confidence})\">${conf.category}</span>` : '';
+            return `<div class="candidate-row" data-public-candidate="1" data-report="${r.id}" data-clip="${r.clipId}">
+              <div><a href="hydrophones.html#${r.clipId}">${escapeHtml(r.clipId)}</a> <span class="cand-time">${formatDate(r.ts)}</span> <span class="cand-type ${r.type}">${escapeHtml(r.type)}</span>${confBadge}${r.at?` <span class=\"cand-at\">[${escapeHtml(r.at)}]</span>`:''}<br>${escapeHtml(r.text||'')}</div>
+            </div>`;
+          }).join('');
+        });
+        publicListEl.innerHTML = `<div class="candidate-report-list">${html2}</div>`;
+      }
+    }
   }
 
   function renderManageReportsFromCache(){ if(__audiosCache) renderManageReports(__audiosCache); }
   function renderCandidateReportsFromCache(){ if(__audiosCache) renderCandidateReports(__audiosCache); }
+
+  function mirrorActivity(){
+    const src = document.getElementById('activityList');
+    const dest = document.getElementById('activityListClone');
+    if(src && dest){ dest.innerHTML = src.innerHTML; }
+  }
+
+  // Separate detail handling for confirmedTab (candidate focus)
+  document.addEventListener('click', e=>{
+    if(role!=='expert') return;
+    const paneConfirmedActive = document.getElementById('confirmedTab')?.classList.contains('active');
+    if(!paneConfirmedActive) return; // only handle when confirmed tab active
+    const row = e.target.closest('.candidate-row');
+    if(row && row.getAttribute('data-report')){
+      const reportId = row.getAttribute('data-report');
+      window.__selectedCandidateReportId = reportId;
+      document.querySelectorAll('#confirmedTab .candidate-row.selected').forEach(r=>r.classList.remove('selected'));
+      row.classList.add('selected');
+      renderCandidateDetailPanel();
+    }
+  });
+
+  function getSelectedCandidateData(){
+    const id = window.__selectedCandidateReportId; if(!id || !__audiosCache) return null;
+    const cStore = candidateStore(); if(!cStore[id]) return null; return { id, ...cStore[id] };
+  }
+  function renderCandidateDetailPanel(){
+    const container = document.getElementById('reportDetailBodyClone'); if(!container) return;
+    const data = getSelectedCandidateData();
+    if(!data){ container.innerHTML='<div class="detail-placeholder">Select a report to view audio and details.</div>'; return; }
+    const audioObj = window.__audioMap && window.__audioMap[data.clipId];
+    const audioUrl = audioObj ? audioObj.url : null;
+    const timeVal = data.at || '';
+    const lastRate = parseFloat(localStorage.getItem('detailAudio:lastRate')||'1')||1;
+    const comments = readComments(data.clipId).filter(c=> c.reportId===data.id || !c.reportId); // legacy comments may lack reportId
+    container.innerHTML = `
+      ${audioUrl?`<audio id="detailAudioElClone" src="${audioUrl}" data-clip="${data.clipId}"></audio>`:'<div class="waveform-empty">No audio URL</div>'}
+      ${audioUrl?`<div class="audio-controls" aria-label="Custom audio controls">
+        <button type="button" class="ac-btn" data-ac="play" aria-label="Play/Pause">▶</button>
+        <button type="button" class="ac-btn" data-ac="back5" aria-label="Back 5 seconds">⏪5</button>
+        <button type="button" class="ac-btn" data-ac="fwd5" aria-label="Forward 5 seconds">5⏩</button>
+        <div class="ac-time" aria-live="off"><span class="ac-cur">0:00</span> / <span class="ac-dur">0:00</span></div>
+        <label class="ac-rate-label">Rate
+          <select class="ac-rate" aria-label="Playback rate">
+            <option value="0.75" ${lastRate===0.75?'selected':''}>0.75x</option>
+            <option value="1" ${lastRate===1?'selected':''}>1x</option>
+            <option value="1.25" ${lastRate===1.25?'selected':''}>1.25x</option>
+            <option value="1.5" ${lastRate===1.5?'selected':''}>1.5x</option>
+            <option value="2" ${lastRate===2?'selected':''}>2x</option>
+          </select>
+        </label>
+        <label class="ac-vol-label">Vol
+          <input type="range" class="ac-vol" min="0" max="1" step="0.01" value="1" aria-label="Volume" />
+        </label>
+        <div class="ac-progress-wrap" aria-label="Seek" role="slider" tabindex="0" data-progress>
+          <div class="ac-progress-bar"><div class="ac-progress-fill" style="width:0%"></div></div>
+        </div>
+        <button type="button" class="ac-btn" id="jumpReportTimeBtnClone" title="Jump to saved report time" ${timeVal?'':'disabled'}>Jump at</button>
+        <button type="button" class="ac-btn" id="loopClearBtnClone" title="Clear loop" disabled>Loop ✖</button>
+      </div>`:''}
+      <div class="time-edit"><label>Time (mm:ss): <input type="text" id="detailTimeInputClone" value="${escapeHtml(timeVal)}" placeholder="mm:ss" maxlength="8" /></label><button id="detailTimeSaveBtnClone" type="button">Save Time</button></div>
+      <div class="detail-waveform" id="detailWaveformClone" data-clip="${data.clipId}">${buildWaveformBars(data.clipId)}</div>
+      <div class="detail-meta-block">${buildDetailMetadata(data)}</div>
+      <div class="detail-comments" id="candidateCommentsWrap">
+        <h4>Comments</h4>
+        <div class="comment-list" id="candidateCommentsList">${comments.length? comments.map(c=>`<div class=\"c-item\"><span class=\"c-user\">${escapeHtml(c.userName||'User')}:</span> ${escapeHtml(c.text||'')} ${c.ts?`<span class=\"c-ts\">${formatDate(c.ts)}</span>`:''}</div>`).join('') : '<div class=\"empty\">No comments yet.</div>'}</div>
+        <div class="comment-form" id="candidateCommentFormWrap"></div>
+      </div>
+    `;
+    // Inject form only if signed in
+    const uid = localStorage.getItem('demoUserId');
+    const uname = localStorage.getItem('demoUserName') || 'You';
+    if(uid){
+      const formWrap = document.getElementById('candidateCommentFormWrap');
+      formWrap.innerHTML = `<form id="candidateCommentForm"><textarea id="candidateCommentText" rows="2" maxlength="240" placeholder="Add a comment about this audio..."></textarea><div><button type="submit" class="mini-btn">Submit</button></div></form>`;
+      formWrap.querySelector('form').addEventListener('submit', ev=>{
+        ev.preventDefault();
+        const txt = formWrap.querySelector('#candidateCommentText').value.trim();
+        if(!txt) return;
+        const list = readComments(data.clipId);
+        const newId = genCommentId(data.clipId, list.length+1);
+        list.push({id:newId, text:txt, ts:new Date().toISOString(), userId:uid, userName:uname, reportId:data.id});
+        localStorage.setItem('comments:'+data.clipId, JSON.stringify(list));
+        formWrap.querySelector('#candidateCommentText').value='';
+        renderCandidateDetailPanel(); // re-render
+        renderComments(__audiosCache||[]); // update public/private comments panels if present
+      });
+    }
+    const saveBtn = document.getElementById('detailTimeSaveBtnClone');
+    if(saveBtn){ saveBtn.addEventListener('click', ()=>{ const inp=document.getElementById('detailTimeInputClone'); const v=inp.value.trim(); if(v && !/^\d{1,2}:[0-5]\d$/.test(v)){ alert('Time must be mm:ss'); return; } const cStore=candidateStore(); const rec=cStore[data.id]; if(rec){ rec.at=v||''; cStore[data.id]=rec; saveCandidateStore(cStore); renderCandidateReportsFromCache(); renderCandidateDetailPanel(); } }); }
+    const audioEl = document.getElementById('detailAudioElClone');
+    if(audioEl){
+      const btnPlay = container.querySelector('[data-ac="play"]');
+      const btnBack5 = container.querySelector('[data-ac="back5"]');
+      const btnFwd5 = container.querySelector('[data-ac="fwd5"]');
+      const rateSel = container.querySelector('.ac-rate');
+      const volRange = container.querySelector('.ac-vol');
+      const curSpan = container.querySelector('.ac-cur');
+      const durSpan = container.querySelector('.ac-dur');
+      const progressWrap = container.querySelector('[data-progress]');
+      const progressFill = container.querySelector('.ac-progress-fill');
+      const fmt = s=>{ if(!isFinite(s)) return '0:00'; const m=Math.floor(s/60); const sec=Math.floor(s%60); return m+':'+String(sec).padStart(2,'0'); };
+      function updateTime(){ curSpan.textContent=fmt(audioEl.currentTime); if(audioEl.duration) progressFill.style.width=(audioEl.currentTime/audioEl.duration)*100+'%'; }
+      audioEl.addEventListener('loadedmetadata', ()=>{ durSpan.textContent=fmt(audioEl.duration); updateTime(); });
+      audioEl.addEventListener('timeupdate', updateTime);
+      audioEl.addEventListener('ended', ()=>{ btnPlay.textContent='▶'; });
+      btnPlay && btnPlay.addEventListener('click', ()=>{ if(audioEl.paused){ audioEl.play(); btnPlay.textContent='⏸'; } else { audioEl.pause(); btnPlay.textContent='▶'; } });
+      btnBack5 && btnBack5.addEventListener('click', ()=>{ audioEl.currentTime=Math.max(0,audioEl.currentTime-5); });
+      btnFwd5 && btnFwd5.addEventListener('click', ()=>{ audioEl.currentTime=Math.min(audioEl.duration||audioEl.currentTime+5,audioEl.currentTime+5); });
+      audioEl.playbackRate = lastRate;
+      rateSel && rateSel.addEventListener('change', ()=>{ audioEl.playbackRate=parseFloat(rateSel.value)||1; localStorage.setItem('detailAudio:lastRate', String(audioEl.playbackRate)); });
+      volRange && volRange.addEventListener('input', ()=>{ audioEl.volume=parseFloat(volRange.value); });
+      function seekFromClientX(x){ const rect=progressWrap.getBoundingClientRect(); const pct=Math.min(1,Math.max(0,(x-rect.left)/rect.width)); audioEl.currentTime=pct*(audioEl.duration||0); }
+      progressWrap && progressWrap.addEventListener('click', e=>seekFromClientX(e.clientX));
+      progressWrap && progressWrap.addEventListener('keydown', e=>{ if(e.key==='ArrowLeft'){ audioEl.currentTime=Math.max(0,audioEl.currentTime-1); } else if(e.key==='ArrowRight'){ audioEl.currentTime=Math.min(audioEl.duration||audioEl.currentTime+1,audioEl.currentTime+1); } });
+      let dragging=false; progressWrap && progressWrap.addEventListener('mousedown', e=>{ dragging=true; seekFromClientX(e.clientX); }); window.addEventListener('mousemove', e=>{ if(dragging) seekFromClientX(e.clientX); }); window.addEventListener('mouseup', ()=>{ dragging=false; });
+      const jumpBtn=document.getElementById('jumpReportTimeBtnClone'); if(jumpBtn && timeVal){ jumpBtn.addEventListener('click', ()=>{ const parts=timeVal.split(':'); if(parts.length===2){ const t=parseInt(parts[0],10)*60+parseInt(parts[1],10); if(isFinite(t)) audioEl.currentTime=Math.min(audioEl.duration||t,t); } }); }
+      // Loop for candidate panel
+      let loopStartIdx=null, loopEndIdx=null; const waveform=document.getElementById('detailWaveformClone'); const bars=waveform?Array.from(waveform.querySelectorAll('.waveform-bar')):[]; const loopClearBtn=document.getElementById('loopClearBtnClone');
+      function clearLoop(){ loopStartIdx=null; loopEndIdx=null; bars.forEach(b=>b.classList.remove('loop-range','loop-start','loop-end')); loopClearBtn && (loopClearBtn.disabled=true); }
+      function applyLoop(){ bars.forEach((b,i)=>{ b.classList.toggle('loop-range', loopStartIdx!=null && loopEndIdx!=null && i>=loopStartIdx && i<=loopEndIdx); b.classList.toggle('loop-start', i===loopStartIdx); b.classList.toggle('loop-end', i===loopEndIdx); }); loopClearBtn && (loopClearBtn.disabled=!(loopStartIdx!=null && loopEndIdx!=null)); }
+      bars.forEach((bar,i)=>{ bar.addEventListener('click', ()=>{ if(loopStartIdx==null){ loopStartIdx=i; } else if(loopEndIdx==null){ loopEndIdx=i; if(loopEndIdx<loopStartIdx){ [loopStartIdx,loopEndIdx]=[loopEndIdx,loopStartIdx]; } } else { loopStartIdx=i; loopEndIdx=null; } applyLoop(); }); });
+      loopClearBtn && loopClearBtn.addEventListener('click', clearLoop);
+      audioEl.addEventListener('timeupdate', ()=>{ if(loopStartIdx!=null && loopEndIdx!=null && audioEl.duration){ const st=(loopStartIdx/bars.length)*audioEl.duration; const et=(loopEndIdx/bars.length)*audioEl.duration; if(audioEl.currentTime> et + 0.05){ audioEl.currentTime=st; } }});
+      audioEl.addEventListener('loadedmetadata', ()=>{ const dur=audioEl.duration||0; bars.forEach((bar,i)=>{ const t=(i/bars.length)*dur; const m=Math.floor(t/60); const s=Math.floor(t%60); bar.title=m+':'+String(s).padStart(2,'0'); }); });
+    }
+  }
+  // Public confirmed tab selection and detail
+  document.addEventListener('click', e=>{
+    if(role==='expert') return; // only public
+    const paneActive = document.getElementById('publicConfirmedTab')?.classList.contains('active');
+    if(!paneActive) return;
+    const row = e.target.closest('.candidate-row[data-public-candidate]');
+    if(row){
+      window.__selectedPublicCandidateId = row.getAttribute('data-report');
+      document.querySelectorAll('#publicConfirmedTab .candidate-row.selected').forEach(r=>r.classList.remove('selected'));
+      row.classList.add('selected');
+      renderPublicCandidateDetail();
+    }
+  });
+  function getSelectedPublicCandidate(){
+    const id = window.__selectedPublicCandidateId; if(!id || !__audiosCache) return null;
+    const cStore = candidateStore(); if(!cStore[id]) return null; return { id, ...cStore[id] };
+  }
+  function renderPublicCandidateDetail(){
+    const container = document.getElementById('publicCandidateDetailBody'); if(!container) return;
+    const data = getSelectedPublicCandidate();
+    if(!data){ container.innerHTML='<div class="detail-placeholder">Select a candidate report to view audio and details.</div>'; return; }
+    const audioObj = window.__audioMap && window.__audioMap[data.clipId];
+    const audioUrl = audioObj ? audioObj.url : null;
+    const timeVal = data.at || '';
+    const lastRate = parseFloat(localStorage.getItem('detailAudio:lastRate')||'1')||1;
+    const comments = readComments(data.clipId).filter(c=> c.reportId===data.id || !c.reportId);
+    container.innerHTML = `
+      ${audioUrl?`<audio id="publicDetailAudioEl" src="${audioUrl}" data-clip="${data.clipId}"></audio>`:'<div class="waveform-empty">No audio URL</div>'}
+      ${audioUrl?`<div class="audio-controls" aria-label="Custom audio controls">
+        <button type="button" class="ac-btn" data-ac="play" aria-label="Play/Pause">▶</button>
+        <button type="button" class="ac-btn" data-ac="back5" aria-label="Back 5 seconds">⏪5</button>
+        <button type="button" class="ac-btn" data-ac="fwd5" aria-label="Forward 5 seconds">5⏩</button>
+        <div class="ac-time" aria-live="off"><span class="ac-cur">0:00</span> / <span class="ac-dur">0:00</span></div>
+        <label class="ac-rate-label">Rate
+          <select class="ac-rate" aria-label="Playback rate">
+            <option value="0.75" ${lastRate===0.75?'selected':''}>0.75x</option>
+            <option value="1" ${lastRate===1?'selected':''}>1x</option>
+            <option value="1.25" ${lastRate===1.25?'selected':''}>1.25x</option>
+            <option value="1.5" ${lastRate===1.5?'selected':''}>1.5x</option>
+            <option value="2" ${lastRate===2?'selected':''}>2x</option>
+          </select>
+        </label>
+        <label class="ac-vol-label">Vol
+          <input type="range" class="ac-vol" min="0" max="1" step="0.01" value="1" aria-label="Volume" />
+        </label>
+        <div class="ac-progress-wrap" aria-label="Seek" role="slider" tabindex="0" data-progress>
+          <div class="ac-progress-bar"><div class="ac-progress-fill" style="width:0%"></div></div>
+        </div>
+        <button type="button" class="ac-btn" id="jumpPublicReportTimeBtn" title="Jump to saved report time" ${timeVal?'':'disabled'}>Jump at</button>
+        <button type="button" class="ac-btn" id="loopClearBtnPublic" title="Clear loop" disabled>Loop ✖</button>
+      </div>`:''}
+      <div class="time-edit"><label>Time (mm:ss): <input type="text" id="publicDetailTimeInput" value="${escapeHtml(timeVal)}" placeholder="mm:ss" maxlength="8" disabled /></label></div>
+      <div class="detail-waveform" id="publicDetailWaveform" data-clip="${data.clipId}">${buildWaveformBars(data.clipId)}</div>
+      <div class="detail-meta-block">${buildDetailMetadata(data)}</div>
+      <div class="detail-comments" id="publicCandidateCommentsWrap">
+        <h4>Comments</h4>
+        <div class="comment-list" id="publicCandidateCommentsList">${comments.length? comments.map(c=>`<div class=\"c-item\"><span class=\"c-user\">${escapeHtml(c.userName||'User')}:</span> ${escapeHtml(c.text||'')} ${c.ts?`<span class=\"c-ts\">${formatDate(c.ts)}</span>`:''}</div>`).join('') : '<div class=\"empty\">No comments yet.</div>'}</div>
+        <div class="comment-form" id="publicCandidateCommentFormWrap"></div>
+      </div>
+    `;
+    const uid = localStorage.getItem('demoUserId');
+    const uname = localStorage.getItem('demoUserName') || 'You';
+    if(uid){
+      const formWrap = document.getElementById('publicCandidateCommentFormWrap');
+      formWrap.innerHTML = `<form id="publicCandidateCommentForm"><textarea id="publicCandidateCommentText" rows="2" maxlength="240" placeholder="Add a comment..."></textarea><div><button type="submit" class="mini-btn">Submit</button></div></form>`;
+      formWrap.querySelector('form').addEventListener('submit', ev=>{
+        ev.preventDefault();
+        const txt = formWrap.querySelector('#publicCandidateCommentText').value.trim();
+        if(!txt) return;
+        const list = readComments(data.clipId);
+        const newId = genCommentId(data.clipId, list.length+1);
+        list.push({id:newId, text:txt, ts:new Date().toISOString(), userId:uid, userName:uname, reportId:data.id});
+        localStorage.setItem('comments:'+data.clipId, JSON.stringify(list));
+        formWrap.querySelector('#publicCandidateCommentText').value='';
+        renderPublicCandidateDetail();
+        renderComments(__audiosCache||[]);
+      });
+    }
+    const audioEl = document.getElementById('publicDetailAudioEl');
+    if(audioEl){
+      const btnPlay = container.querySelector('[data-ac="play"]');
+      const btnBack5 = container.querySelector('[data-ac="back5"]');
+      const btnFwd5 = container.querySelector('[data-ac="fwd5"]');
+      const rateSel = container.querySelector('.ac-rate');
+      const volRange = container.querySelector('.ac-vol');
+      const curSpan = container.querySelector('.ac-cur');
+      const durSpan = container.querySelector('.ac-dur');
+      const progressWrap = container.querySelector('[data-progress]');
+      const progressFill = container.querySelector('.ac-progress-fill');
+      const fmt = s=>{ if(!isFinite(s)) return '0:00'; const m=Math.floor(s/60); const sec=Math.floor(s%60); return m+':'+String(sec).padStart(2,'0'); };
+      function updateTime(){ curSpan.textContent=fmt(audioEl.currentTime); if(audioEl.duration) progressFill.style.width=(audioEl.currentTime/audioEl.duration)*100+'%'; }
+      audioEl.addEventListener('loadedmetadata', ()=>{ durSpan.textContent=fmt(audioEl.duration); updateTime(); const dur=audioEl.duration||0; const bars=[...document.querySelectorAll('#publicDetailWaveform .waveform-bar')]; bars.forEach((bar,i)=>{ const t=(i/bars.length)*dur; const m=Math.floor(t/60); const s=Math.floor(t%60); bar.title=m+':'+String(s).padStart(2,'0'); }); });
+      audioEl.addEventListener('timeupdate', updateTime);
+      audioEl.addEventListener('ended', ()=>{ btnPlay.textContent='▶'; });
+      btnPlay && btnPlay.addEventListener('click', ()=>{ if(audioEl.paused){ audioEl.play(); btnPlay.textContent='⏸'; } else { audioEl.pause(); btnPlay.textContent='▶'; } });
+      btnBack5 && btnBack5.addEventListener('click', ()=>{ audioEl.currentTime=Math.max(0,audioEl.currentTime-5); });
+      btnFwd5 && btnFwd5.addEventListener('click', ()=>{ audioEl.currentTime=Math.min(audioEl.duration||audioEl.currentTime+5,audioEl.currentTime+5); });
+      audioEl.playbackRate = lastRate;
+      rateSel && rateSel.addEventListener('change', ()=>{ audioEl.playbackRate=parseFloat(rateSel.value)||1; localStorage.setItem('detailAudio:lastRate', String(audioEl.playbackRate)); });
+      volRange && volRange.addEventListener('input', ()=>{ audioEl.volume=parseFloat(volRange.value); });
+      function seekFromClientX(x){ const rect=progressWrap.getBoundingClientRect(); const pct=Math.min(1,Math.max(0,(x-rect.left)/rect.width)); audioEl.currentTime=pct*(audioEl.duration||0); }
+      progressWrap && progressWrap.addEventListener('click', e=>seekFromClientX(e.clientX));
+      progressWrap && progressWrap.addEventListener('keydown', e=>{ if(e.key==='ArrowLeft'){ audioEl.currentTime=Math.max(0,audioEl.currentTime-1); } else if(e.key==='ArrowRight'){ audioEl.currentTime=Math.min(audioEl.duration||audioEl.currentTime+1,audioEl.currentTime+1); } });
+      let dragging=false; progressWrap && progressWrap.addEventListener('mousedown', e=>{ dragging=true; seekFromClientX(e.clientX); }); window.addEventListener('mousemove', e=>{ if(dragging) seekFromClientX(e.clientX); }); window.addEventListener('mouseup', ()=>{ dragging=false; });
+      let loopStartIdx=null, loopEndIdx=null; const waveform=document.getElementById('publicDetailWaveform'); const bars=waveform?Array.from(waveform.querySelectorAll('.waveform-bar')):[]; const loopClearBtn=document.getElementById('loopClearBtnPublic');
+      function clearLoop(){ loopStartIdx=null; loopEndIdx=null; bars.forEach(b=>b.classList.remove('loop-range','loop-start','loop-end')); loopClearBtn && (loopClearBtn.disabled=true); }
+      function applyLoop(){ bars.forEach((b,i)=>{ b.classList.toggle('loop-range', loopStartIdx!=null && loopEndIdx!=null && i>=loopStartIdx && i<=loopEndIdx); b.classList.toggle('loop-start', i===loopStartIdx); b.classList.toggle('loop-end', i===loopEndIdx); }); loopClearBtn && (loopClearBtn.disabled=!(loopStartIdx!=null && loopEndIdx!=null)); }
+      bars.forEach((bar,i)=>{ bar.addEventListener('click', ()=>{ if(loopStartIdx==null){ loopStartIdx=i; } else if(loopEndIdx==null){ loopEndIdx=i; if(loopEndIdx<loopStartIdx){ [loopStartIdx,loopEndIdx]=[loopEndIdx,loopStartIdx]; } } else { loopStartIdx=i; loopEndIdx=null; } applyLoop(); }); });
+      loopClearBtn && loopClearBtn.addEventListener('click', clearLoop);
+      audioEl.addEventListener('timeupdate', ()=>{ if(loopStartIdx!=null && loopEndIdx!=null && audioEl.duration){ const st=(loopStartIdx/bars.length)*audioEl.duration; const et=(loopEndIdx/bars.length)*audioEl.duration; if(audioEl.currentTime> et + 0.05){ audioEl.currentTime=st; } }});
+    }
+  }
 
   // Editing workflow
   document.addEventListener('click', e => {
@@ -923,6 +1356,9 @@
   let __audiosCache = null;
   function renderUserReportsFromCache(){ if(__audiosCache) renderUserReports(__audiosCache); }
   function renderFavoritesFromCache(){ if(__audiosCache) renderFavorites(__audiosCache); }
+
+  // Build audio map on fetch (if not already done in previous version)
+  function buildAudioMap(audios){ window.__audioMap = audios.reduce((acc,a)=>{ acc[a.id]=a; return acc; },{}); }
 
   // Re-render favorites (and user reports) when user changes to reflect user-specific bookmarks
   window.addEventListener('userchange', ()=>{ renderFavoritesFromCache(); renderUserReportsFromCache(); });

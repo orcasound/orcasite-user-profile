@@ -24,31 +24,55 @@
 
   <main class="container single-col">
     <h2>Public User Dashboard</h2>
-    <section class="scoreboard" id="scoreBoard">
-      <div class="metric" id="mComments"><span class="num">0</span><span class="label">Comments</span></div>
-      <div class="metric" id="mReports"><span class="num">0</span><span class="label">Reports</span></div>
-      <div class="metric" id="mChecked"><span class="num">0</span><span class="label">Audio Checked</span></div>
-      <div class="metric" id="mTags"><span class="num">0</span><span class="label">Unique Tags</span></div>
-      <div class="metric total" id="mScore"><span class="num">0</span><span class="label">Score</span></div>
-    </section>
-    <section class="triple-grid">
-      <div class="triple-col" id="colReports">
-        <h3 class="tri-title">Your Reports</h3>
-        <div class="tri-body" id="userReports">Loading...</div>
+    <nav class="dash-tabs" id="publicDashTabs">
+      <button class="dash-tab active" data-tab="publicMyDataTab">My Data</button>
+      <button class="dash-tab" data-tab="publicConfirmedTab">Confirmed Candidates</button>
+    </nav>
+    <div class="tab-panes">
+      <div class="tab-pane active" id="publicMyDataTab">
+        <section class="scoreboard" id="scoreBoard">
+          <div class="metric" id="mComments"><span class="num">0</span><span class="label">Comments</span></div>
+          <div class="metric" id="mReports"><span class="num">0</span><span class="label">Reports</span></div>
+          <div class="metric" id="mChecked"><span class="num">0</span><span class="label">Audio Checked</span></div>
+          <div class="metric" id="mTags"><span class="num">0</span><span class="label">Unique Tags</span></div>
+          <div class="metric total" id="mScore"><span class="num">0</span><span class="label">Score</span></div>
+        </section>
+        <section class="triple-grid">
+          <div class="triple-col" id="colReports">
+            <h3 class="tri-title">Your Reports</h3>
+            <div class="tri-body" id="userReports">Loading...</div>
+          </div>
+          <div class="triple-col" id="colComments">
+            <h3 class="tri-title">Your Comments</h3>
+            <div class="tri-body" id="commentList">Loading...</div>
+          </div>
+            <div class="triple-col" id="colFavorites">
+            <h3 class="tri-title">Favorites</h3>
+            <div class="tri-body" id="favList">Loading...</div>
+          </div>
+        </section>
+        <section class="dash-panel" id="activityPanel">
+          <h3>Recent Activity</h3>
+          <div class="panel-body" id="activityList">Loading...</div>
+        </section>
       </div>
-      <div class="triple-col" id="colComments">
-        <h3 class="tri-title">Your Comments</h3>
-        <div class="tri-body" id="commentList">Loading...</div>
+      <div class="tab-pane" id="publicConfirmedTab">
+        <div class="reporting-layout">
+          <div class="reporting-left">
+            <section class="dash-panel" id="publicCandidateReportsPanel">
+              <h3>Candidate Reports</h3>
+              <div class="panel-body" id="publicCandidateReportsList">Loading...</div>
+            </section>
+          </div>
+          <div class="reporting-right">
+            <section class="dash-panel" id="publicCandidateDetailPanel">
+              <h3>Report Audio Controls</h3>
+              <div class="panel-body" id="publicCandidateDetailBody"><div class="detail-placeholder">Select a candidate report to view audio and details.</div></div>
+            </section>
+          </div>
+        </div>
       </div>
-      <div class="triple-col" id="colFavorites">
-        <h3 class="tri-title">Favorites</h3>
-        <div class="tri-body" id="favList">Loading...</div>
-      </div>
-    </section>
-    <section class="dash-panel" id="activityPanel">
-      <h3>Recent Activity</h3>
-      <div class="panel-body" id="activityList">Loading...</div>
-    </section>
+    </div>
   </main>
 
   <footer class="site-footer"><div>Prototype — not a production site.</div></footer>

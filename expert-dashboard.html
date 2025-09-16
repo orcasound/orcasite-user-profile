@@ -25,16 +25,19 @@
   <main class="container single-col">
     <h2>Expert User Dashboard</h2>
     <nav class="dash-tabs" id="expertDashTabs">
-      <button class="dash-tab active" data-tab="reportsTab">Reporting Candidates</button>
+      <button class="dash-tab active" data-tab="reportsTab">Evaluate Candidates</button>
+      <button class="dash-tab" data-tab="confirmedTab">Confirmed Candidates</button>
       <button class="dash-tab" data-tab="shiftsTab">Listening Shifts</button>
+      <button class="dash-tab" data-tab="expertMyDataTab">My Data</button>
     </nav>
     <div class="tab-panes">
       <div class="tab-pane active" id="reportsTab">
-        <div class="dash-sections">
+        <div class="reporting-layout">
           <section class="dash-panel" id="aggregateMetricsPanel">
             <h3>Aggregate Metrics</h3>
             <div class="panel-body" id="aggregateMetricsBody">Loading...</div>
           </section>
+          <div class="reporting-left">
           <section class="dash-panel" id="userReportsManagePanel">
         <h3>User Reports Management</h3>
         <div class="filter-bar" id="reportManageFilters">
@@ -65,15 +68,42 @@
         </div>
         <div class="panel-body" id="userReportsManageList">Loading...</div>
       </section>
-          <section class="dash-panel" id="candidateReportsPanel">
-        <h3>Candidate Reports</h3>
-        <div class="candidate-tools"><button class="mini-btn" id="exportCandidatesBtn">Export JSON</button></div>
-        <div class="panel-body" id="candidateReportsList">Loading...</div>
-      </section>
-          <section class="dash-panel" id="activityPanel">
-        <h3>Recent Activity</h3>
-        <div class="panel-body" id="activityList">Loading...</div>
-      </section>
+          </div>
+          <div class="reporting-right">
+            <section class="dash-panel" id="reportDetailPanel">
+              <h3>Report Audio Controls</h3>
+              <div class="panel-body" id="reportDetailBody">
+                <div class="detail-placeholder">Select a report to view audio and details.</div>
+              </div>
+            </section>
+            <section class="dash-panel" id="activityPanel">
+              <h3>Recent Activity</h3>
+              <div class="panel-body" id="activityList">Loading...</div>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div class="tab-pane" id="confirmedTab">
+        <div class="reporting-layout">
+          <div class="reporting-left">
+            <section class="dash-panel" id="candidateReportsPanel">
+              <h3>Candidate Reports</h3>
+              <div class="candidate-tools"><button class="mini-btn" id="exportCandidatesBtn">Export JSON</button></div>
+              <div class="panel-body" id="candidateReportsList">Loading...</div>
+            </section>
+          </div>
+          <div class="reporting-right">
+            <section class="dash-panel" id="reportDetailPanelClone">
+              <h3>Report Audio Controls</h3>
+              <div class="panel-body" id="reportDetailBodyClone">
+                <div class="detail-placeholder">Select a report to view audio and details.</div>
+              </div>
+            </section>
+            <section class="dash-panel" id="activityPanelClone">
+              <h3>Recent Activity</h3>
+              <div class="panel-body" id="activityListClone">Loading...</div>
+            </section>
+          </div>
         </div>
       </div>
       <div class="tab-pane" id="shiftsTab">
@@ -97,6 +127,35 @@
           <div class="panel-body" id="shiftList">No shifts yet.</div>
           <div class="shift-summary" id="shiftSummary"></div>
           <div class="shift-legend" id="shiftLegend"></div>
+        </section>
+      </div>
+      <div class="tab-pane" id="expertMyDataTab">
+        <section class="scoreboard" id="scoreBoard">
+          <div class="metric" id="mComments"><span class="num">0</span><span class="label">Comments</span></div>
+          <div class="metric" id="mReports"><span class="num">0</span><span class="label">Reports</span></div>
+          <div class="metric" id="mConfirmed"><span class="num">0</span><span class="label">Confirmed <span class="metric-weight" title="Each confirmation counts 3x toward score" aria-label="Confirmation weight triple">x3</span></span></div>
+          <div class="metric" id="mChecked"><span class="num">0</span><span class="label">Audio Checked</span></div>
+          <div class="metric" id="mTags"><span class="num">0</span><span class="label">Unique Tags</span></div>
+          <div class="metric total" id="mScore"><span class="num">0</span><span class="label">Score</span></div>
+        </section>
+        <div class="score-legend" id="scoreLegend"><span class="legend-label">Scoring:</span> Confirmations weighted <strong>3×</strong> (badge shows multiplier).</div>
+        <section class="triple-grid">
+          <div class="triple-col" id="colReports">
+            <h3 class="tri-title">Your Reports</h3>
+            <div class="tri-body" id="userReports">Loading...</div>
+          </div>
+          <div class="triple-col" id="colComments">
+            <h3 class="tri-title">Your Comments</h3>
+            <div class="tri-body" id="commentList">Loading...</div>
+          </div>
+          <div class="triple-col" id="colFavorites">
+            <h3 class="tri-title">Favorites</h3>
+            <div class="tri-body" id="favList">Loading...</div>
+          </div>
+        </section>
+        <section class="dash-panel" id="activityPanelMyData">
+          <h3>Recent Activity</h3>
+          <div class="panel-body" id="activityList">Loading...</div>
         </section>
       </div>
     </div>
