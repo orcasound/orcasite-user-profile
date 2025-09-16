@@ -38,15 +38,19 @@
   // Listening shifts elements (expert tab 2)
   const shiftsPanel = document.getElementById('listeningShiftsPanel');
   const shiftListEl = document.getElementById('shiftList');
-  const shiftStartInput = document.getElementById('shiftStart');
-  const shiftEndInput = document.getElementById('shiftEnd');
+  // Weekly shift form inputs
+  const shiftDaySel = document.getElementById('shiftDay');
+  const shiftStartTimeSel = document.getElementById('shiftStartTime');
+  const shiftEndTimeSel = document.getElementById('shiftEndTime');
   const addShiftBtn = document.getElementById('addShiftBtn');
   const clearShiftFormBtn = document.getElementById('clearShiftFormBtn');
   const editingShiftIdInput = document.getElementById('editingShiftId');
-  const calPrevBtn = document.getElementById('calPrevBtn');
-  const calNextBtn = document.getElementById('calNextBtn');
-  const calMonthLabel = document.getElementById('calMonthLabel');
+  const weekPrevBtn = document.getElementById('weekPrevBtn');
+  const weekNextBtn = document.getElementById('weekNextBtn');
+  const weekLabel = document.getElementById('weekLabel');
   const shiftCalendarEl = document.getElementById('shiftCalendar');
+  const weekHeaderEl = document.getElementById('weekHeader');
+  const weekBodyEl = document.getElementById('weekBody');
   const shiftSummaryEl = document.getElementById('shiftSummary');
   const shiftLegendEl = document.getElementById('shiftLegend');
   const tabsNav = document.getElementById('expertDashTabs');
@@ -225,7 +229,12 @@
     shiftLegendEl.innerHTML = items;
   }
 
-  function clearShiftForm(){ editingShiftIdInput && (editingShiftIdInput.value=''); shiftStartInput && (shiftStartInput.value=''); shiftEndInput && (shiftEndInput.value=''); }
+  function clearShiftForm(){
+    if(editingShiftIdInput) editingShiftIdInput.value='';
+    if(shiftDaySel) shiftDaySel.value=new Date().getDay();
+    if(shiftStartTimeSel) shiftStartTimeSel.selectedIndex=16; // 08:00 baseline
+    if(shiftEndTimeSel) shiftEndTimeSel.selectedIndex=20; // 10:00 baseline
+  }
 
   function validateShift(startIso, endIso){
     if(!startIso || !endIso) return 'Start and End required';
@@ -235,26 +244,118 @@
     return null;
   }
 
+  // Weekly calendar state
+  let weekAnchor = (function(){ const now=new Date(); const day = now.getDay(); const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()-day); return start; })(); // Sunday start
+
+  function fmtDayLabel(d){ return d.toLocaleDateString(undefined,{weekday:'short', month:'numeric', day:'numeric'}); }
+  function cloneDate(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+
+  function buildTimeOptions(){
+    if(!shiftStartTimeSel || !shiftEndTimeSel) return;
+    if(shiftStartTimeSel.options.length) return; // already built
+    // Build in 30-minute increments
+    for(let h=0; h<24; h++){
+      for(let m=0; m<60; m+=30){
+        const label = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+        const o1=document.createElement('option'); o1.value=label; o1.textContent=label; shiftStartTimeSel.appendChild(o1);
+        const o2=document.createElement('option'); o2.value=label; o2.textContent=label; shiftEndTimeSel.appendChild(o2.cloneNode(true));
+      }
+    }
+  }
+
+  function isoForWeekDay(dayIdx, timeHHMM){
+    const base = cloneDate(weekAnchor); // Sunday
+    base.setDate(base.getDate()+parseInt(dayIdx,10));
+    const [hh,mm] = timeHHMM.split(':').map(x=>parseInt(x,10));
+    base.setHours(hh,mm,0,0);
+    return base.toISOString().slice(0,16)+':00.000Z'.slice(-1); // ensure minutes precision
+  }
+
+  function renderWeekCalendar(){
+    if(!weekHeaderEl || !weekBodyEl) return;
+    const days=[]; for(let i=0;i<7;i++){ const d=new Date(weekAnchor.getFullYear(), weekAnchor.getMonth(), weekAnchor.getDate()+i); days.push(d); }
+    weekLabel && (weekLabel.textContent = days[0].toLocaleDateString(undefined,{month:'short', day:'numeric'}) + ' - ' + days[6].toLocaleDateString(undefined,{month:'short', day:'numeric', year:'numeric'}));
+    weekHeaderEl.innerHTML = '<div class="wh-cell">Time</div>'+days.map(d=>`<div class="wh-cell" data-wday="${d.getDay()}">${fmtDayLabel(d)}</div>`).join('');
+    // Build time column 00:00 - 23:30
+    const timeLabels = []; for(let h=0; h<24; h++){ timeLabels.push(String(h).padStart(2,'0')+':00'); timeLabels.push(String(h).padStart(2,'0')+':30'); }
+    weekBodyEl.innerHTML = '';
+    // time column
+    const timeCol = document.createElement('div'); timeCol.className='time-col';
+    timeLabels.forEach((t,i)=>{ const lab=document.createElement('div'); lab.className='time-slot-label'; lab.textContent = i%2===0 ? t : ''; timeCol.appendChild(lab); });
+    weekBodyEl.appendChild(timeCol);
+    // day columns
+    const shifts = readShifts();
+    days.forEach(d=>{
+      const col=document.createElement('div'); col.className='day-col'; col.setAttribute('data-day', d.toISOString().slice(0,10));
+      // Add shift blocks belonging to this day
+      const dayShifts = shifts.filter(s=>{
+        const sd=new Date(s.start); const ed=new Date(s.end);
+        // Overlaps this day if any time on this date
+        const dayStart=new Date(d.getFullYear(), d.getMonth(), d.getDate(),0,0,0,0);
+        const dayEnd=new Date(d.getFullYear(), d.getMonth(), d.getDate(),23,59,59,999);
+        return ed>=dayStart && sd<=dayEnd;
+      });
+      dayShifts.forEach(s=>{
+        const sd=new Date(s.start); const ed=new Date(s.end);
+        const dayStart=new Date(d.getFullYear(), d.getMonth(), d.getDate(),0,0,0,0);
+        const minutesStart = Math.max(0, (sd - dayStart)/60000);
+        const minutesEnd = Math.min(24*60, (ed - dayStart)/60000);
+        const topPct = (minutesStart/(24*60))*100; const heightPct = Math.max(2, ((minutesEnd-minutesStart)/(24*60))*100);
+        const owned = s.userId === localStorage.getItem('demoUserId');
+        const div=document.createElement('div');
+        div.className='shift-block'+(owned?' owned':'');
+        div.style.top=topPct+'%';
+        div.style.height=heightPct+'%';
+        div.setAttribute('data-id', s.id);
+        div.innerHTML = `<span class="sb-time">${sd.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - ${ed.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span><span class="sb-user">${owned?'You':escapeHtml(s.userName||'')}</span>`;
+        col.appendChild(div);
+      });
+      weekBodyEl.appendChild(col);
+    });
+  }
+
+  function renderCalendar(){ // shim old calls
+    renderWeekCalendar();
+  }
+
+  if(weekPrevBtn){ weekPrevBtn.addEventListener('click', ()=>{ weekAnchor = new Date(weekAnchor.getFullYear(), weekAnchor.getMonth(), weekAnchor.getDate()-7); renderWeekCalendar(); }); }
+  if(weekNextBtn){ weekNextBtn.addEventListener('click', ()=>{ weekAnchor = new Date(weekAnchor.getFullYear(), weekAnchor.getMonth(), weekAnchor.getDate()+7); renderWeekCalendar(); }); }
+
+  buildTimeOptions();
+  clearShiftForm();
+
   if(addShiftBtn){
     addShiftBtn.addEventListener('click', ()=>{
-      const startVal = shiftStartInput.value;
-      const endVal = shiftEndInput.value;
-      const err = validateShift(startVal, endVal);
-      if(err){ alert(err); return; }
+      if(!shiftDaySel || !shiftStartTimeSel || !shiftEndTimeSel){ alert('Shift inputs missing'); return; }
+      const startIso = isoForWeekDay(shiftDaySel.value, shiftStartTimeSel.value);
+      const endIso = isoForWeekDay(shiftDaySel.value, shiftEndTimeSel.value);
+      const err = validateShift(startIso, endIso); if(err){ alert(err); return; }
       const editing = editingShiftIdInput.value;
-      if(editing){ updateShift(editing, startVal, endVal); }
-      else { addShift(startVal, endVal); }
-      clearShiftForm(); renderCalendar(); renderShifts(); renderShiftSummary(); renderShiftLegend();
+      if(editing){ updateShift(editing, startIso, endIso); }
+      else { addShift(startIso, endIso); }
+      clearShiftForm(); renderWeekCalendar(); renderShifts(); renderShiftSummary(); renderShiftLegend();
     });
   }
   if(clearShiftFormBtn){ clearShiftFormBtn.addEventListener('click', ()=> clearShiftForm()); }
-  if(calPrevBtn){ calPrevBtn.addEventListener('click', ()=>{ calView = new Date(calView.getFullYear(), calView.getMonth()-1, 1); renderCalendar(); }); }
-  if(calNextBtn){ calNextBtn.addEventListener('click', ()=>{ calView = new Date(calView.getFullYear(), calView.getMonth()+1, 1); renderCalendar(); }); }
+  // Remove old month navigation listeners (replaced by week prev/next)
   if(shiftCalendarEl){
     shiftCalendarEl.addEventListener('click', e=>{
-      const cell = e.target.closest('.cal-day'); if(!cell) return;
-      selectedDay = cell.getAttribute('data-day');
-      renderCalendar(); renderShifts(); renderShiftSummary();
+      const blk = e.target.closest('.shift-block');
+      if(!blk) return;
+      const id = blk.getAttribute('data-id');
+      const shifts = readShifts();
+      const s = shifts.find(x=>x.id===id); if(!s) return;
+      // populate form for edit if owned
+      if(s.userId === localStorage.getItem('demoUserId')){
+        editingShiftIdInput.value = s.id;
+        const sd = new Date(s.start);
+        shiftDaySel.value = String(sd.getDay());
+        const stLabel = String(sd.getHours()).padStart(2,'0')+':'+String(sd.getMinutes()).padStart(2,'0');
+        const ed = new Date(s.end);
+        const etLabel = String(ed.getHours()).padStart(2,'0')+':'+String(ed.getMinutes()).padStart(2,'0');
+        shiftStartTimeSel.value = stLabel;
+        shiftEndTimeSel.value = etLabel;
+      }
     });
   }
   if(shiftListEl){

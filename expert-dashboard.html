@@ -111,18 +111,36 @@
           <h3>Listening Shifts</h3>
           <div class="shift-controls">
             <div class="shift-form" id="shiftForm">
-              <label>Start: <input type="datetime-local" id="shiftStart" /></label>
-              <label>End: <input type="datetime-local" id="shiftEnd" /></label>
+              <label>Week Day:
+                <select id="shiftDay">
+                  <option value="0">Sunday</option>
+                  <option value="1">Monday</option>
+                  <option value="2">Tuesday</option>
+                  <option value="3">Wednesday</option>
+                  <option value="4">Thursday</option>
+                  <option value="5">Friday</option>
+                  <option value="6">Saturday</option>
+                </select>
+              </label>
+              <label>Start Time:
+                <select id="shiftStartTime"></select>
+              </label>
+              <label>End Time:
+                <select id="shiftEndTime"></select>
+              </label>
               <button id="addShiftBtn">Add Shift</button>
               <button id="clearShiftFormBtn" type="button" class="secondary">Clear</button>
               <input type="hidden" id="editingShiftId" />
             </div>
             <div class="calendar-nav">
-              <button id="calPrevBtn" type="button">◀</button>
-              <span id="calMonthLabel"></span>
-              <button id="calNextBtn" type="button">▶</button>
+              <button id="weekPrevBtn" type="button">◀</button>
+              <span id="weekLabel"></span>
+              <button id="weekNextBtn" type="button">▶</button>
             </div>
-            <div class="calendar-grid" id="shiftCalendar">Loading calendar...</div>
+            <div class="week-calendar" id="shiftCalendar">
+              <div class="week-header" id="weekHeader"></div>
+              <div class="week-body" id="weekBody">Loading week...</div>
+            </div>
           </div>
           <div class="panel-body" id="shiftList">No shifts yet.</div>
           <div class="shift-summary" id="shiftSummary"></div>
