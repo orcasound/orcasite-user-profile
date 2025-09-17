@@ -300,12 +300,14 @@
         const dayStart=new Date(d.getFullYear(), d.getMonth(), d.getDate(),0,0,0,0);
         const minutesStart = Math.max(0, (sd - dayStart)/60000);
         const minutesEnd = Math.min(24*60, (ed - dayStart)/60000);
-        const topPct = (minutesStart/(24*60))*100; const heightPct = Math.max(2, ((minutesEnd-minutesStart)/(24*60))*100);
+        const pxPerMinute = 24 / 30; // slot is 24px per 30 minutes
+        const topPx = minutesStart * pxPerMinute;
+        const heightPx = Math.max(8, (minutesEnd - minutesStart) * pxPerMinute);
         const owned = s.userId === localStorage.getItem('demoUserId');
         const div=document.createElement('div');
         div.className='shift-block'+(owned?' owned':'');
-        div.style.top=topPct+'%';
-        div.style.height=heightPct+'%';
+        div.style.top=topPx+'px';
+        div.style.height=heightPx+'px';
         div.setAttribute('data-id', s.id);
         div.innerHTML = `<span class="sb-time">${sd.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - ${ed.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span><span class="sb-user">${owned?'You':escapeHtml(s.userName||'')}</span>`;
         col.appendChild(div);
